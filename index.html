@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GWAYS</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+  <style>
+    body { margin: 0; font-family: Arial, sans-serif; }
+    #map { height: 100vh; width: 100%; display: none; }
+
+    .search-box {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: white;
+      padding: 10px;
+      box-shadow: 0px 2px 8px rgba(0,0,0,0.3);
+      border-radius: 8px;
+      z-index: 1000;
+      font-size: 14px;
+      display: none;
+    }
+
+    input {
+      padding: 6px;
+      width: 160px;
+      margin-right: 4px;
+      border: 1px solid #aaa;
+      border-radius: 4px;
+    }
+
+    button {
+      padding: 6px 10px;
+      background: #007bff;
+      border: none;
+      color: white;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    #info-box {
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      background: white;
+      padding: 10px;
+      border-radius: 6px;
+      box-shadow: 0px 2px 8px rgba(0,0,0,0.3);
+      font-size: 14px;
+      z-index: 1000;
+      min-width: 220px;
+      display: none;
+    }
+
+    /* PRELOADER */
+    #preloader {
+      position: fixed;
+      height: 100vh;
+      width: 100%;
+      top: 0;
+      left: 0;
+      background: black;
+      color: white;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 2.5rem;
+      font-weight: bold;
+      z-index: 2000;
+      opacity: 1;
+      transition: opacity 0.8s ease-out;
+    }
+
+    .fade-text {
+      animation: fadeWord 1s infinite;
+    }
+
+    @keyframes fadeWord {
+      0% { opacity: 0; }
+      50% { opacity: 1; }
+      100% { opacity: 0; }
+    }
+
+  </style>
+</head>
+<body>
+
+  <!-- PRELOADER -->
+  <div id="preloader"><span id="preloaderText" class="fade-text">GWAYS</span></div>
+
+  <div class="search-box">
+    <input id="start" type="text" placeholder="Start: city or address" />
+    <input id="end" type="text" placeholder="End: city or address" />
+    <button onclick="calculateRoute()">Route</button>
+  </div>
+
+  <div id="info-box">Distance: - <br> Time: - <br> Mode: -</div>
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <script>
+    // PRELOADER LOGIC
+    const loaderWords = ["GWAYS", "GET DISTANCE", "GET TIME", "GET MEANS"];
+    let i = 0;
+    const loaderText = document.getElementById("preloaderText");
+    const preloader = document.getElementById("preloader");
+
+    const interval = setInterval(() => {
+      loaderText.innerText = loaderWords[i];
+      i++;
+      if (i >= loaderWords.length) {
+        clearInterval(interval);
+        setTimeout(() => {
+          preloader.style.opacity = "0";
+          setTimeout(() => {
+            preloader.style.display = "none";
+            document.getElementById("map").style.display = "block";
+            document.querySelector(".search-box").style.display = "block";
+            document.getElementById("info-box").style.display = "block";
+          }, 800);
+        }, 900);
+      }
+    }, 1000);
+
+    // ORS MAP
+    const ORS_KEY = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjkzMmJmMTNmZmIyMjRmZDdhYjAyNzBhYmY3MTdiOTkzIiwiaCI6Im11cm11cjY0In0=";
+
+    const map = L.map("map").setView([6.5244, 3.3792], 12);
+
+    const streetLayer = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png");
+    const satelliteLayer = L.tileLayer("https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}", {
+      maxZoom: 20,
+      subdomains:['mt0','mt1','mt2','mt3']
+    });
+
+    streetLayer.addTo(map);
+
+    const baseLayers = {
+      "Street Map": streetLayer,
+      "Satellite": satelliteLayer
+    };
+    L.control.layers(baseLayers).addTo(map);
+
+    let routeLayer;
+
+    async function geocode(place) {
+      const url = `https://api.openrouteservice.org/geocode/search?api_key=${ORS_KEY}&text=${encodeURIComponent(place)}`;
+      const res = await fetch(url);
+      const json = await res.json();
+      if (json.features && json.features.length > 0) {
+        return json.features[0].geometry.coordinates;
+      } else {
+        alert("Location not found: " + place);
+        return null;
+      }
+    }
+
+    async function calculateRoute() {
+      try {
+        const startPlace = document.getElementById("start").value;
+        const endPlace = document.getElementById("end").value;
+
+        if (!startPlace || !endPlace) {
+          alert("Please enter both start and end locations.");
+          return;
+        }
+
+        const startCoords = await geocode(startPlace);
+        const endCoords = await geocode(endPlace);
+
+        if (!startCoords || !endCoords) return;
+
+        const modes = {
+          Car: "driving-car",
+          Bicycle: "cycling-regular",
+          Walking: "foot-walking"
+        };
+
+        let bestMode = "";
+        let bestTime = Infinity;
+        let bestRoute = null;
+
+        for (const [modeName, mode] of Object.entries(modes)) {
+          const url = `https://api.openrouteservice.org/v2/directions/${mode}/geojson`;
+          const body = { coordinates: [startCoords, endCoords] };
+
+          const response = await fetch(url, {
+            method: "POST",
+            headers: { "Authorization": ORS_KEY, "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          });
+
+          const json = await response.json();
+          const summary = json.features[0].properties.summary;
+
+          if (summary.duration < bestTime) {
+            bestTime = summary.duration;
+            bestMode = modeName;
+            bestRoute = json;
+          }
+        }
+
+        if (routeLayer) map.removeLayer(routeLayer);
+
+        routeLayer = L.geoJSON(bestRoute, { style: { color: "blue", weight: 5 }}).addTo(map);
+        map.fitBounds(routeLayer.getBounds());
+
+        const distanceKm = (bestRoute.features[0].properties.summary.distance / 1000).toFixed(2);
+        const timeMin = (bestRoute.features[0].properties.summary.duration / 60).toFixed(1);
+
+        document.getElementById("info-box").innerHTML =
+          `Distance: ${distanceKm} km <br> Time: ${timeMin} mins <br> Mode: ${bestMode}`;
+
+      } catch (error) {
+        alert("Error calculating route: " + error);
+      }
+    }
+  </script>
+  
+  
+  <script>
+  // Register Service Worker
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("sw.js")
+      .then(() => console.log("Service Worker Registered ✅"))
+      .catch(err => console.log("SW Error:", err));
+  }
+</script>
+
+</body>
+</html>

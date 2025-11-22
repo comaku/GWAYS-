@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>GWAYS Offline</title>
+  <style>
+    body{
+      margin:0;
+      height:100vh;
+      display:flex;
+      flex-direction:column;
+      justify-content:center;
+      align-items:center;
+      background:#0a0f24;
+      font-family:Arial, sans-serif;
+      text-align:center;
+      color:white;
+    }
+    h1{
+      font-size:32px;
+      font-weight:bold;
+      margin-bottom:10px;
+      color:#00eaff;
+    }
+    p{
+      font-size:18px;
+      max-width:300px;
+      line-height:1.4;
+      margin-bottom:20px;
+    }
+    button{
+      padding:10px 20px;
+      border:none;
+      color:white;
+      background:#007bff;
+      font-size:16px;
+      border-radius:6px;
+    }
+  </style>
+</head>
+<body>
+  <h1>🚦 GWAYS</h1>
+  <p>You are offline right now.<br>
+  We can't load maps or routing without internet.</p>
+
+  <p>Please reconnect and try again.</p>
+
+  <button onclick="location.reload()">Retry</button>
+
+  <script>
+    // 🔥 Auto return to app when internet is back
+    window.addEventListener("online", () => {
+      window.location.href = "index.html";
+    });
+  </script>
+</body>
+</html>
